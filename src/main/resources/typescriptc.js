@@ -130,11 +130,75 @@
         fs.writeFileSync(file, JSON.stringify(sourceMap), 'utf-8');
     }
 
+    /**
+     * {
+     *   inputFile: {
+     *     version: 1,
+     *     referencedFiles: [
+     *       {
+     *         source:string,
+     *         target:string
+     *       }
+     *     ]
+     *   }
+     * }
+     * @param sourceFiles
+     * @param inputFiles
+     * @param outputFiles
+     * @returns {{}}
+     */
+    function buildDependencyMap(sourceFiles, inputFiles, outputFiles) {
+
+        var result = {};
+
+        sourceFiles.forEach(function(sourceFile) {
+
+            var inputFile = path.normalize(sourceFile.fileName);
+            var inputDir = path.dirname(inputFile);
+
+            logger.debug("Processing source " + inputFile);
+
+            var outputFile = outputFiles[inputFiles.indexOf(inputFile)];
+            var outputDirname = path.dirname(outputFile);
+
+            result[inputFile] = { version: 1, referencedFiles: [] };
+
+            if (undefined === sourceFile.referencedFiles) {
+                return;
+            }
+
+            sourceFile.referencedFiles.forEach(function(dep){
+
+                var relativePath = path.normalize(dep.fileName);
+                var absolutePath = path.resolve(inputDir, relativePath);
+                var targetPath   = replaceFileExtension(path.resolve(outputDirname, relativePath), '.js');
+
+                if (!fs.existsSync(targetPath)) {
+                    logger.debug("Skipping irrelevant dependency " + relativePath);
+                    return;
+                }
+
+                if (0 !== targetPath.indexOf(path.normalize(args.target))) {
+                    logger.debug("Skipping dependency outside project root: " + relativePath);
+                    return;
+                }
+
+                result[inputFile].referencedFiles.push({
+                    'source': absolutePath,
+                    'target': path.relative(args.target, targetPath)
+                });
+            });
+        });
+
+        return result;
+    }
+
     function compile(args) {
         var sourceMaps = args.sourceFileMappings;
         var inputFiles = [];
         var compilerOutputFiles = [];
         var outputFiles = [];
+        var dependencyFiles = [];
         var rootDir = "";
         sourceMaps.forEach(function(map) {
             // populate inputFiles
@@ -245,6 +309,11 @@
 
         var sourceFiles = program.getSourceFiles();
         logger.debug("got some source files");
+
+        if (args.options.dependencies) {
+            dependencyFiles = buildDependencyMap(sourceFiles, inputFiles, outputFiles);
+        }
+
         sourceFiles.forEach(function (sourceFile) {
             // have to normalize path due to different OS path separators
             var index = inputFiles.indexOf(path.normalize(sourceFile.fileName));
@@ -275,6 +344,14 @@
             if (options.declaration) {
                 var outputFileDeclaration = replaceFileExtension(outputFile, ".d.ts");
                 filesWritten.push(outputFileDeclaration);
+            }
+
+            if (args.options.dependencies) {
+
+                var outputFileDeps = outputFile + ".deps";
+                var dependencyFilesOutput = dependencyFiles[inputFiles[index]];
+                fs.writeFileSync(outputFileDeps, JSON.stringify(dependencyFilesOutput), 'utf-8');
+                filesWritten.push(outputFileDeps);
             }
 
             if(options.sourceMap){

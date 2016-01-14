@@ -30,6 +30,7 @@ object Import {
     val typescriptGenerateCompiler = TaskKey[File]("generateCompiler", "Generates the typescript compile script.")
 
     val declaration = SettingKey[Boolean]("typescript-declaration", "Generates corresponding '.d.ts' file.")
+    val dependencies = SettingKey[Boolean]("typescript-dependencies", "Outputs a dependency map for typescript files.")
     val sourceMap = SettingKey[Boolean]("typescript-source-map", "Outputs a source map for typescript files.")
     val sourceRoot = SettingKey[String]("typescript-source-root", "Specifies the location where debugger should locate TypeScript files instead of source locations.")
     val mapRoot = SettingKey[String]("typescript-map-root", "Specifies the location where debugger should locate map files instead of generated locations.")
@@ -65,6 +66,7 @@ object SbtTypescript extends AutoPlugin {
 
     jsOptions := JsObject(
       "declaration" -> JsBoolean(declaration.value),
+      "dependencies" -> JsBoolean(dependencies.value),
       "sourceMap" -> JsBoolean(sourceMap.value),
       "sourceRoot" -> JsString(sourceRoot.value),
       "mapRoot" -> JsString(mapRoot.value),
@@ -84,6 +86,7 @@ object SbtTypescript extends AutoPlugin {
   override def projectSettings = Seq(
 
     declaration := false,
+    dependencies := false,
     sourceMap := false,
     sourceRoot := "",
     mapRoot := "",
