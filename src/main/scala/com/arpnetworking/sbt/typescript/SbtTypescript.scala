@@ -17,15 +17,20 @@
 package com.arpnetworking.sbt.typescript
 
 import com.typesafe.sbt.jse.JsEngineImport.JsEngineKeys
+import com.typesafe.sbt.web.pipeline.Pipeline
 import sbt._
 import com.typesafe.sbt.jse.SbtJsTask
 import com.typesafe.sbt.web.SbtWeb
 import sbt.Keys._
-import spray.json.{JsString, JsBoolean, JsObject}
+import spray.json.{JsArray, JsString, JsBoolean, JsObject}
 
 object Import {
 
   object TypescriptKeys {
+    val bundler = TaskKey[Pipeline.Stage]("typescript-bundle", "Bundle typescript output.")
+    val bundlePath = SettingKey[String]("typescript-bundle-path", "Relative path to the output bundle file.")
+    val bundleBuildDir = SettingKey[File]("typescript-bundle-build-dir", "todo")
+
     val typescript = TaskKey[Seq[File]]("typescript", "Invoke the typescript compiler.")
     val typescriptGenerateCompiler = TaskKey[File]("generateCompiler", "Generates the typescript compile script.")
 
@@ -116,4 +121,92 @@ object SbtTypescript extends AutoPlugin {
     typescript in TestAssets := (typescript in TestAssets).dependsOn(webModules in TestAssets).value
   )
 
+}
+
+object SbtBundle extends AutoPlugin {
+
+  override def requires = SbtTypescript
+
+  override def trigger = AllRequirements
+
+  import com.typesafe.sbt.jse.SbtJsEngine.autoImport.JsEngineKeys._
+  import com.typesafe.sbt.jse.SbtJsTask.JsTaskProtocol._
+  import com.typesafe.sbt.jse.SbtJsTask.autoImport.JsTaskKeys._
+  import com.typesafe.sbt.web.Import.WebKeys._
+  import com.typesafe.sbt.web.SbtWeb.autoImport._
+  import com.arpnetworking.sbt.typescript.SbtTypescript.autoImport.TypescriptKeys._
+
+  override def projectSettings = Seq(
+
+    bundlePath := "javascripts/bundle.js",
+    bundleBuildDir := (resourceManaged in bundler).value / "build",
+    excludeFilter in bundler := HiddenFileFilter || "*.d.ts",
+    includeFilter in bundler := "*.deps" || "*.js" || "*.js.map" || "*.ts",
+    resourceManaged in bundler := webTarget.value / bundler.key.label,
+    bundler := runBundler.dependsOn(nodeModules in Assets).value,
+    jsOptions := JsObject(
+      "bundlePath" -> JsString(bundlePath.value),
+      "declaration" -> JsBoolean(declaration.value),
+      "dependencies" -> JsBoolean(dependencies.value),
+      "environment" -> JsString(if(appConfiguration.value.arguments().contains("dist")) "prod" else "dev"),
+      "logLevel" -> JsString(logLevel.value.toString),
+      "moduleKind" -> JsString(moduleKind.value),
+      "sourceMap" -> JsBoolean(sourceMap.value)
+    ).toString(),
+    shellSource := {
+      SbtWeb.copyResourceTo(
+        (resourceManaged in bundler).value,
+        getClass.getClassLoader.getResource("typescript-bundler.js"),
+        streams.value.cacheDirectory / "copy-resource"
+      )
+    }
+  )
+
+  private def buildSourceTargetArg(srcTarget: Seq[(File,String)]): String = {
+    JsArray(srcTarget.map( c => {
+      JsObject(
+        "source" -> JsString(c._1.getPath),
+        "target" -> JsString(c._2))
+    }).toList).toString()
+  }
+
+  private def runBundler: Def.Initialize[Task[Pipeline.Stage]] = Def.task {
+
+    mappings =>
+
+      val include = (includeFilter in bundler).value
+      val exclude = (excludeFilter in bundler).value
+
+      val preMappings = mappings.filter(f => !f._1.isDirectory && include.accept(f._1) && !exclude.accept(f._1))
+
+      val cacheDirectory = streams.value.cacheDirectory / bundler.key.label
+      val runUpdate = FileFunction.cached(cacheDirectory, FilesInfo.hash) {
+        inputFiles =>
+
+          val targetPath = bundleBuildDir.value.getPath
+          val nodeModules = (nodeModuleDirectories in Plugin).value.map(_.getPath)
+          val args = Seq(buildSourceTargetArg(preMappings), targetPath, jsOptions.value)
+          val timeout = (timeoutPerSource in bundler).value * (if (preMappings.size < 1) 1 else preMappings.size)
+
+          if (preMappings.nonEmpty) {
+            val size = preMappings.count(p => p._2.endsWith(".js") || p._2.endsWith(".jsx"))
+            streams.value.log.info("TypeScript bundling on " + size + " source(s)")
+          }
+
+          SbtJsTask.executeJs(
+            state.value,
+            (engineType in bundler).value,
+            (command in bundler).value,
+            nodeModules,
+            shellSource.value,
+            args,
+            timeout
+          ).map {
+            result => result.convertTo[List[File]]
+          }.head.toSet
+      }
+
+      val postMappings = runUpdate(preMappings.map(c => c._1).toSet).pair(relativeTo(bundleBuildDir.value))
+      (mappings.toSet -- preMappings.toSet ++ postMappings.toSet).toSeq
+  }
 }
