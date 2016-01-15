@@ -487,19 +487,15 @@
             throw Error(msg);
         }
 
-        var dependencies = args.options.dependencies;
-        if (true !== dependencies) {
-            msg = "TypescriptKeys.dependencies must be enabled for bundling to work.";
-            throw Error(msg);
-        }
-
         var outputFile = path.join(args.target, args.options.bundlePath);
         var sourceFileMappings = copyAndMapSourceFiles(args.target, args.sourceFileMappings);
-        var javascriptSources  = sourceFileMappings.filter(includeExts(['.js','.jsx'])).map(toSource);
+        var sourceFiles  = sourceFileMappings.filter(includeExts(['.js','.jsx'])).map(toSource);
 
-        var sourceFiles = buildDependencyGraph(args.target, javascriptSources);
+        if (args.options.dependencies) {
+            sourceFiles = buildDependencyGraph(args.target, sourceFiles);
+        }
 
-        logger.debug("Source files ordered", sourceFiles);
+        logger.debug("Combining source files ", sourceFiles);
 
         if (!args.options.sourceMap) {
             combine(outputFile, sourceFiles);

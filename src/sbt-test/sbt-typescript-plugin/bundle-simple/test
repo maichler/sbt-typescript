@@ -36,4 +36,23 @@ $ exists target/web/typescriptBundle/build/javascripts/bundle.js.map
 
 > mocha
 
+# Without dependencies
+
+> clean
+> set TypescriptKeys.dependencies := false
+> typescript
+-$ exists target/web/typescript/main/javascripts/main.js.deps
+-$ exists target/web/typescript/main/javascripts/common/bar.js.deps
+-$ exists target/web/typescript/main/javascripts/common/foo.js.deps
+
+> assets
+$ exists target/web/typescriptBundle/build/javascripts/main.js
+-$ exists target/web/typescriptBundle/build/javascripts/main.js.deps
+$ exists target/web/typescriptBundle/build/javascripts/common/bar.js
+-$ exists target/web/typescriptBundle/build/javascripts/common/bar.js.deps
+$ exists target/web/typescriptBundle/build/javascripts/common/foo.js
+-$ exists target/web/typescriptBundle/build/javascripts/common/foo.js.deps
+$ exists target/web/typescriptBundle/build/javascripts/bundle.js
+
+
 
