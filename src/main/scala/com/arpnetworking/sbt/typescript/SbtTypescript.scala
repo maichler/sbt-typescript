@@ -20,7 +20,7 @@ import com.typesafe.sbt.jse.JsEngineImport.JsEngineKeys
 import com.typesafe.sbt.web.pipeline.Pipeline
 import sbt._
 import com.typesafe.sbt.jse.SbtJsTask
-import com.typesafe.sbt.web.SbtWeb
+import com.typesafe.sbt.web.{PathMapping, SbtWeb}
 import sbt.Keys._
 import spray.json.{JsArray, JsString, JsBoolean, JsObject}
 
@@ -29,7 +29,7 @@ object Import {
   object TypescriptKeys {
     val bundler = TaskKey[Pipeline.Stage]("typescript-bundle", "Bundle typescript output.")
     val bundlePath = SettingKey[String]("typescript-bundle-path", "Relative path to the output bundle file.")
-    val bundleBuildDir = SettingKey[File]("typescript-bundle-build-dir", "todo")
+    val bundleBuildDir = SettingKey[File]("typescript-bundle-build-dir", "Build output directory.")
 
     val typescript = TaskKey[Seq[File]]("typescript", "Invoke the typescript compiler.")
     val typescriptGenerateCompiler = TaskKey[File]("generateCompiler", "Generates the typescript compile script.")
@@ -176,8 +176,14 @@ object SbtBundle extends AutoPlugin {
 
       val include = (includeFilter in bundler).value
       val exclude = (excludeFilter in bundler).value
+      val foreign = new SimpleFileFilter({ f =>
+        def fileStartsWith(dir: File): Boolean = f.getPath.startsWith(dir.getPath)
+        fileStartsWith((resourceDirectory in Assets).value) || fileStartsWith((WebKeys.webModuleDirectory in Assets).value)
+      });
 
-      val preMappings = mappings.filter(f => !f._1.isDirectory && include.accept(f._1) && !exclude.accept(f._1))
+      val preMappings = mappings.filter(f =>
+        !f._1.isDirectory && include.accept(f._1) && !exclude.accept(f._1) && !foreign.accept(f._1)
+      )
 
       val cacheDirectory = streams.value.cacheDirectory / bundler.key.label
       val runUpdate = FileFunction.cached(cacheDirectory, FilesInfo.hash) {
