@@ -15,11 +15,11 @@
 //
 sbtPlugin := true
 
-organization := "com.arpnetworking"
+organization := "net.aichler"
 
 name := "sbt-typescript"
 
-version := "0.1.11-SNAPSHOT"
+version := "0.1.10-2"
 
 scalaVersion := "2.10.5"
 
@@ -42,15 +42,7 @@ addSbtPlugin("com.typesafe.sbt" %% "sbt-js-engine" % "1.1.3")
 
 scalacOptions += "-feature"
 
-publishMavenStyle := true
-
-publishTo := {
-  val nexus = "https://oss.sonatype.org/"
-  if (isSnapshot.value)
-    Some("snapshots" at nexus + "content/repositories/snapshots")
-  else
-    Some("releases" at nexus + "service/local/staging/deploy/maven2")
-}
+publishMavenStyle := false
 
 pomIncludeRepository := { _ => false}
 
@@ -74,6 +66,10 @@ pomExtra := (
         <url>http://www.arpnetworking.com</url>
       </developer>
     </developers>)
+
+licenses += ("Apache-2.0", url("http://www.apache.org/licenses/LICENSE-2.0"))
+
+bintrayOrganization in bintray := None
 
 scriptedSettings
 
